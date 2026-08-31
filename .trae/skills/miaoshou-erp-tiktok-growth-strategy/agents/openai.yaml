@@ -1,0 +1,4 @@
+interface:
+  display_name: "妙手ERP TikTok 店铺增长"
+  short_description: "为TikTok新店设计首单冷启动，也诊断成熟店铺增长"
+  default_prompt: "使用 $miaoshou-erp-tiktok-growth-strategy 根据我的开店阶段，制定TikTok新店首单计划或店铺增长路线。"

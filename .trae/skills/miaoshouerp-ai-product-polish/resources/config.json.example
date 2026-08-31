@@ -1,0 +1,6 @@
+{
+  "base_url": "https://openapi-erp.91miaoshou.com",
+  "cookie": "your_local_session_cookie_here",
+  "timer_token": "",
+  "timeout": 60
+}

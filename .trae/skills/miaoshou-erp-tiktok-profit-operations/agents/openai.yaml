@@ -1,0 +1,4 @@
+interface:
+  display_name: "妙手ERP TikTok 利润与经营"
+  short_description: "从一句帮我定价开始，读取妙手模板并补齐必要成本"
+  default_prompt: "使用 $miaoshou-erp-tiktok-profit-operations 帮我给这款TikTok商品定价；先确认站点，再读取妙手可用定价模板并只询问缺失成本。"

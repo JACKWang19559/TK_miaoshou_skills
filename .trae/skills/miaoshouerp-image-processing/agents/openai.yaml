@@ -1,0 +1,4 @@
+interface:
+  display_name: "妙手 ERP 图片处理"
+  short_description: "白底抠图、智能消除、翻译、水印及结果落盘。"
+  default_prompt: "使用 $miaoshouerp-image-processing 处理商品图片；优先复用当前任务中采集箱 API 或采集箱编辑 skill 已返回的图片 URL，没有可用 URL 时再处理用户直链或本地附件；正式提交前预览确认，并将成功结果保存到本地。"

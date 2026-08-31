@@ -1,0 +1,59 @@
+{
+  "template_name": "TikTok越南站跨境定价模板（移植自货叮咚生产模板）",
+  "site": "VN",
+  "site_type": "cross_border",
+  "currency_cost": "CNY",
+  "currency_sell": "VND",
+  "weight_unit": "KG",
+  "provenance": {
+    "source": "货叮咚ERP越南站定价模板（用户生产环境已验证）",
+    "cross_reference": "妙手OpenAPI get_site_default_setting（2026-08-31拉取）",
+    "fx_retrieved_at": "2026-08-31",
+    "note": "百分比费率以货叮咚生产模板为准（更保守、保利润）；妙手API默认费率仅作交叉核对"
+  },
+  "fx": {
+    "cny_to_vnd": 3875,
+    "note": "1人民币=3875越南盾（2026-08-31）。汇率波动大，定价前应刷新。"
+  },
+  "rate_components": {
+    "platform_commission_rate": { "value": 0.161, "label": "平台佣金费率", "source": "货叮咚16.1%（妙手API默认5.78%偏低，服装类目实际更高，采用生产值）" },
+    "payment_fee_rate": { "value": 0.05, "label": "交易手续费率", "source": "货叮咚5%（妙手API默认6%）" },
+    "withdrawal_fee_rate": { "value": 0.01, "label": "提现手续费率", "source": "货叮咚1%（与妙手一致）" },
+    "vat_rate": { "value": 0.10, "label": "增值税率VAT", "source": "货叮咚10%（与妙手一致）" },
+    "affiliate_commission_rate": { "value": 0.10, "label": "达人佣金费率", "source": "货叮咚10%（联盟订单才产生；新店无达人时实际为0，预算用保守值）", "toggleable": true },
+    "sfp_fee_rate": { "value": 0.0, "label": "SFP服务费率", "source": "货叮咚未填" }
+  },
+  "fixed_costs_cny": {
+    "order_processing_fee": { "value": 0.77, "label": "订单处理费" },
+    "freight_forwarder_fee": { "value": 2.00, "label": "货代费用" },
+    "other_fee": { "value": 0.0, "label": "其它费用" },
+    "domestic_shipping_fee": { "value": 0.0, "label": "国内段运费", "note": "货叮咚未勾选，默认0" }
+  },
+  "logistics": {
+    "weight_source": "product_package_weight",
+    "head_leg": {
+      "label": "头程运费",
+      "mode": "official_cross_border_logistics",
+      "seller_paid": true,
+      "charge_basis": "weight",
+      "default_cny_per_item": 8.0,
+      "note": "官方跨境物流按重量计费，需在妙手/货叮咚『查看官方运价表』按实际重量核实。默认8.0CNY为轻小件(约0.3-0.5kg服装)占位假设，定价前必须按实际包裹重量替换。"
+    },
+    "last_leg": {
+      "label": "尾程运费",
+      "cny": 7.71,
+      "seller_paid": false,
+      "note": "『商家承担部分运费』未勾选=买家支付，属收入抵减项，不计入卖家成本。妙手买家物流默认7.74CNY/30000VND，相互印证。"
+    }
+  },
+  "target_margin_scenarios": {
+    "traffic": { "margin": 0.08, "label": "引流品（新店起号/低价冲量）" },
+    "normal": { "margin": 0.18, "label": "常规品（稳健动销）" },
+    "premium": { "margin": 0.25, "label": "利润款/长青品" }
+  },
+  "price_tail_vnd": {
+    "round_to": 1000,
+    "psychological_tail": 9000,
+    "note": "先四舍五入到千越南盾，再下压到x9000心理尾价（如305000->299000）；若下压后低于保本价则进位到x9000。"
+  }
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "妙手ERP TikTok Listing增长优化"
+  short_description: "诊断TikTok商品页内容、价格、视觉素材与转化问题并给出修改方案"
+  default_prompt: "使用 $miaoshou-erp-tiktok-listing-optimize 诊断这个TikTok商品并给出可确认的字段级优化方案。"

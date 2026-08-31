@@ -1,0 +1,5 @@
+# 妙手开放平台 API 调用（签名/HTTP 请求）
+requests>=2.28.0
+
+# 服装尺码表图生成（miaoshou-erp-tiktok-apparel-readiness/gen_sizechart.py）
+Pillow>=9.0.0

@@ -1,0 +1,5 @@
+interface:
+  display_name: "妙手 ERP AI 商品润色"
+  short_description: "通过妙手 AI 生成或润色商品标题、描述和 SKU 销售规格"
+  default_prompt: "Use $miaoshouerp-ai-product-polish to polish this product title, description, and SKU specifications."
+
