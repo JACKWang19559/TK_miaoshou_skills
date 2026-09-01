@@ -10,17 +10,22 @@
 
 | 图床 | 地址 | 结果 | 说明 |
 |---|---|---|---|
-| litterbox | `litter.catbox.moe` | ✅ 可用 | catbox 临时托管，免 key，默认 72h，本环境可达 |
-| catbox | `catbox.moe` | ⚠️ 不稳定 | 永久链接免 key，但主站在部分网络/地区不可达 |
+| litterbox | `litter.catbox.moe` | ⚠️ 不稳 | catbox 临时托管，免 key，默认 72h；部分出口 IP 被 Cloudflare 拦（实测 500） |
+| catbox | `catbox.moe` | ❌ 常挂 | 永久链接免 key，但主站在多数网络/地区被 WAF 拦（实测 412） |
+| telegra.ph | `telegra.ph` | ❌ 常挂 | Telegram 官方图床，匿名上传常返 400 Unknown error |
+| **GitHub raw** | `raw.githubusercontent.com` | ✅ 可靠 | 把图 push 到自建仓库 assets，raw 直链永久有效、海外可达，见 `push_github_raw.py` |
 | 0x0.st | `0x0.st` | ❌ 关停 | 2025 年起已停止匿名上传 |
 | sm.ms | `sm.ms` | ❌ 需 token | 匿名上传受限，需账号 API token |
 
-结论：默认用 `upload_image.py`（litterbox 主用、catbox 回退）。
+结论：优先 `upload_image.py`（litterbox 主用、catbox 回退）；两者都失败时用
+`push_github_raw.py` 走 GitHub raw 兜底（依赖已配置可推送的 git 仓库）。
 
 **临时链接注意事项**
 - litterbox 链接 72h 后失效；务必在有效期内发布，发布时平台转存 CDN 后即长期有效。
-- 若需长期不发布也不失效，用 `--host catbox`（永久）或上传到自建 OSS/COS。
+- 若需长期不发布也不失效，用 `--host catbox`（永久）、GitHub raw 或自建 OSS/COS。
 - 平台校验图片格式：URL 必须以 `.jpg/.jpeg/.png/.webp` 结尾或返回对应 Content-Type。
+- GitHub raw 兜底用法：`py push_github_raw.py sizechart.png --repo <仓库路径> --rel assets/<图名>.png`，
+  脚本自动从 `origin` 远程推导 raw 前缀并打印直链。
 
 ## 二、尺码表设计规范
 
@@ -30,6 +35,10 @@
   肩宽(Rộng vai) / 袖长(Dài tay)。
 - **尺码行**：S–3XL 为越南女装常见档；数据为亚洲版型通用参考值，
   非货源实测。若工厂提供真实尺寸，用 `--data` 传自定义 JSON 覆盖。
+- **均码（Freesize）商品**：SKU 只有单一尺码（如「均码【80-130斤】」）
+  时，不能用 S–3XL 多档表；用 `--data` 生成单行表，列改为
+  `Size / Dài áo(cm) / Cân nặng(kg)`，行如 `Freesize / 40-50 / 40-65`
+  （衣长与适合体重从 1688 详情页「衣长」「尺码」字段读取）。
 - **字体**：越南语带变音符号，用 Windows 自带 Arial（`arial.ttf` /
   `arialbd.ttf`），勿用宋体/黑体（缺拉丁扩展字形）。
 - 自定义 JSON 字段：`title / subtitle / headers / col_w / rows / notes / accent`。
@@ -51,6 +60,10 @@
    站点语言（如氨纶→Elastan）。
 5. **非必填不硬填**：制造商/责任人/EPR 仅欧盟站点强制，越南站
    `必填:0`，留空不影响发布。
+6. **多选限制（坑）**：只有元数据标注 `可多选` 的属性才能一次填多个值；
+   未标 `可多选` 的属性（如越南站「设计」attrId 100406）一次只能填一个
+   valueId，多填会报 `产品属性【设计】不支持多选`。多个设计元素
+   （如蕾丝+蝴蝶结）只能保留主打元素一个，或拆到各自可多选的不同属性。
 
 属性简化 JSON（传给 `build_edit_payload.py --attributes-file`）：
 

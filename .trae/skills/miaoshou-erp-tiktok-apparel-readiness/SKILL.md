@@ -47,13 +47,18 @@ py -X utf8 "$EDIT\scripts\tiktok_collectbox.py" diagnose <detailId> --mode shop 
 # 用站点语言预设生成（内置越南语女装上衣 S-3XL）
 py -X utf8 "$SKILL\scripts\gen_sizechart.py" --site VN --out sizechart.png
 # 工厂有真实尺寸时用自定义 JSON：--data my_sizes.json
+# 均码商品（SKU 只有单一尺码）勿用 S-3XL 预设，须用 --data 生成单行
+# Freesize 表（列 Size / Dài áo / Cân nặng），见 references 第二节
 
 # 上传公网图床拿直链（stdout 只输出 URL；litterbox 默认 72h）
 py -X utf8 "$SKILL\scripts\upload_image.py" sizechart.png
+# 图床被拦截（litterbox 500 / catbox 412 / telegra.ph 400）时，用 GitHub raw 兜底：
+py -X utf8 "$SKILL\scripts\push_github_raw.py" sizechart.png --repo <git仓库路径> --rel assets/sizechart.png
 ```
 
 把输出的 URL 填入下一步 `--size-chart-url`。临时链接 72h 失效，需在
-有效期内发布；要长期链接加 `--host catbox`。
+有效期内发布；要长期链接加 `--host catbox` 或走 GitHub raw（永久）。
+GitHub raw 依赖已配置可推送的 git 仓库，脚本自动从 origin 推导 raw 前缀。
 
 ### 3. 查必填商品属性（报错驱动）
 
@@ -112,6 +117,10 @@ image`+URL、`productAttributes` 落库；diagnose 结论为「可发布」。
 
 - 尺码数据为通用参考值，非货源实测；有工厂尺寸务必用 `--data` 覆盖。
 - 尺码表语言必须匹配站点（越南站用越南语），字体用 Arial 以支持变音符号。
+- 均码商品（单一尺码 SKU）用 `--data` 生成单行 Freesize 表，勿套 S–3XL。
+- 图床不可达时用 `push_github_raw.py` 走 GitHub raw 兜底（永久、海外可达）。
+- 属性多选限制：未标「可多选」的属性（如「设计」100406）只能填一个值，
+  多填报 `产品属性【设计】不支持多选`，只保留主打元素。
 - 不在技能脚本里硬编码任何 detailId/shopId/ossMd5/图床 URL/属性 ID——
   这些都是任务数据，每次运行时实时获取。
 - 临时脚本与中间 JSON 放工作临时目录，技能目录只保留可复用脚本与文档。
