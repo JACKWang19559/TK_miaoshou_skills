@@ -71,6 +71,19 @@ CONTRADICTION_GROUPS = [
     (["coc tay", "tay ngan", "ngan tay"], ["tay dai", "dai tay"]),
 ]
 
+# 服饰信号词（去变音后 token）。中文标题无法与越南语热搜词做词面相关性，
+# 改为要求关键词含至少一个服饰核心词，挡住类目错配混入的
+# 羽毛球（cầu lông/vợt）、拖鞋（dép/đế trấu）、手表（đồng hồ）等非服饰词。
+APPAREL_SIGNALS = {
+    # 越南语服饰核心词（去变音后）
+    "ao", "quan", "vay", "dam", "len", "thun", "ren", "khoac",
+    "bigsize", "baby", "dang", "juyp",
+    # 英语服饰核心词
+    "shirt", "tee", "top", "tops", "dress", "skirt", "pants", "jeans",
+    "sweater", "cardigan", "knit", "blazer", "hoodie", "polo",
+    "bodysuit", "crop", "tank",
+}
+
 
 def parse_num(value):
     """把越南语千分位格式的数值字符串解析为 float。
@@ -142,6 +155,24 @@ def core_tokens(text):
     return {t for t in tokens if len(t) >= 2 and t not in TITLE_STOPWORDS}
 
 
+def is_cjk_title(text):
+    """判断标题是否以中日韩等非拉丁脚本为主（如中文标题）。
+
+    中文标题经 normalize_vi 后中文字符会被清空，无法与越南语热搜词做
+    词面交集，相关性过滤会误杀全部词。此时应跳过相关性 / 属性冲突过滤，
+    只靠类目过滤保证相关性（跨境「中文标题 + 追加越南语热搜词」场景）。
+
+    Args:
+        text: 标题文本。
+
+    Returns:
+        中文字符数大于 0 且不少于拉丁字母数时返回 True。
+    """
+    cjk = sum(1 for ch in text if "\u4e00" <= ch <= "\u9fff")
+    latin = sum(1 for ch in text if ch.isascii() and ch.isalpha())
+    return cjk > 0 and cjk >= latin
+
+
 def is_shop_name(name):
     """判断关键词是否为店铺名 / 品牌名。
 
@@ -173,6 +204,9 @@ def is_shop_name(name):
             t not in ASCII_FASHION_WHITELIST for t in content_tokens
         ):
             return True
+    # 规则 4：纯 ASCII 短语含单字符字母 token（如 ``knit e``），视为噪音词
+    if name.isascii() and any(len(t) == 1 and t.isalpha() for t in tokens):
+        return True
     return False
 
 
@@ -224,8 +258,9 @@ def is_contradictory(name, title_norm):
 
 
 def filter_keywords(leads, cate_id=None, category=None, max_words=8,
-                    min_volume=1, title_core=None, title_norm=None):
-    """过滤关键词：三级类目 → 品牌词 → 词数 / 搜索量 → 属性冲突 → 标题相关性。
+                    min_volume=1, title_core=None, title_norm=None,
+                    require_apparel_signal=False):
+    """过滤关键词：三级类目 → 品牌词 → 服饰信号 → 词数/搜索量 → 属性冲突 → 相关性。
 
     Args:
         leads: 关键词原始列表。
@@ -235,6 +270,7 @@ def filter_keywords(leads, cate_id=None, category=None, max_words=8,
         min_volume: 最小搜索量阈值。
         title_core: 可选，标题核心词集合；传入时启用相关性过滤与打分。
         title_norm: 可选，归一化标题；传入时启用属性冲突过滤。
+        require_apparel_signal: 可选，要求关键词含服饰信号词（中文标题场景兜底）。
 
     Returns:
         (keywords, stats)：
@@ -242,7 +278,7 @@ def filter_keywords(leads, cate_id=None, category=None, max_words=8,
           与标题的核心词重合数（越大越相关）；
         - stats: 各阶段淘汰数量统计。
     """
-    stats = {"total": len(leads), "cate": 0, "brand": 0,
+    stats = {"total": len(leads), "cate": 0, "brand": 0, "non_apparel": 0,
              "words": 0, "volume": 0, "contradiction": 0, "relevance": 0}
     result = []
     for lead in leads:
@@ -265,6 +301,10 @@ def filter_keywords(leads, cate_id=None, category=None, max_words=8,
         # 2. 店铺 / 品牌名过滤
         if is_shop_name(name):
             stats["brand"] += 1
+            continue
+        # 2.5 服饰信号词过滤（中文标题场景：挡类目错配的非服饰词）
+        if require_apparel_signal and not (core_tokens(name) & APPAREL_SIGNALS):
+            stats["non_apparel"] += 1
             continue
         # 3. 词数过滤：热搜词应是简短搜索词，而非长商品名
         if len(name.split()) > max_words:
@@ -364,8 +404,15 @@ def main():
         print("关键词文件里没有 leads 数据")
         return
 
+    require_apparel = not args.no_relevance and is_cjk_title(args.title)
     title_core = None if args.no_relevance else core_tokens(args.title)
     title_norm = None if args.no_relevance else normalize_vi(args.title)
+    if require_apparel:
+        # 中文标题：无法与越南语热搜词做词面交集，跳过相关性 / 属性冲突过滤，
+        # 改用服饰信号词兜底（挡类目错配的非服饰词）
+        title_core = None
+        title_norm = None
+        print("检测到中文标题：关闭相关性 / 属性冲突过滤，启用服饰信号词过滤。")
     keywords, stats = filter_keywords(
         leads,
         cate_id=args.cate_id,
@@ -374,11 +421,13 @@ def main():
         min_volume=args.min_volume,
         title_core=title_core,
         title_norm=title_norm,
+        require_apparel_signal=require_apparel,
     )
 
     print(f"过滤统计：共 {stats['total']} 条 → 类目不符 {stats['cate']}、"
-          f"品牌/店铺名 {stats['brand']}、词数过长 {stats['words']}、"
-          f"搜索量不足 {stats['volume']}、属性冲突 {stats['contradiction']}、"
+          f"品牌/店铺名 {stats['brand']}、非服饰词 {stats['non_apparel']}、"
+          f"词数过长 {stats['words']}、搜索量不足 {stats['volume']}、"
+          f"属性冲突 {stats['contradiction']}、"
           f"标题不相关 {stats['relevance']} → 候选 {len(keywords)} 条")
     ranked = sorted(keywords, key=lambda k: (-k.get("rel", 1), -k["volume"]))
     print("候选热搜词 Top 10（按 相关性 > 搜索量 排序）：")
