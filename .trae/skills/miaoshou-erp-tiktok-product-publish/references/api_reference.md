@@ -218,6 +218,62 @@ POST /open/v1/product/collect_box/tiktok/collect_box/save_move_collect_task
 }
 ```
 
+### 7. Search Publish Log
+
+Query publish task records to verify final publish status.
+
+**Endpoint:**
+```
+POST /open/v1/product/collect_box/tiktok/move_collect/search_move_collect_list
+```
+
+**Request:**
+```json
+{
+  "pageNo": 1,
+  "pageSize": 20,
+  "filter": {
+    "status": "success",
+    "itemId": "",
+    "sourceItemId": ""
+  }
+}
+```
+
+`filter.status` 枚举：`success`（发布成功）、`fail`（发布失败）、
+`processing`（发布中）、`cancel`（已取消）。
+
+**注意**：`filter.itemId` 并非采集箱详情 ID（`collectBoxDetailId`），实测
+按 collectBoxDetailId 过滤会返回空；如需按采集箱 ID 定位，请在结果中本地
+按 `collectBoxDetailId` 过滤。
+
+**Response:**
+```json
+{
+  "result": "success",
+  "code": "200",
+  "data": {
+    "moveCollectDetailList": [
+      {
+        "collectBoxDetailId": "3339668319",
+        "shopId": "18296521",
+        "status": "success",
+        "reason": null,
+        "platformItemId": "1737297118221534752",
+        "title": "...",
+        "gmtCreate": "2026-09-01 10:47:49",
+        "gmtModified": "2026-09-01 10:50:05"
+      }
+    ],
+    "total": 1
+  }
+}
+```
+
+`status=success` 且有 `platformItemId` 表示已推送到 TikTok 并生成平台商品 ID；
+`status=fail` 时 `reason` 给出失败原因。TikTok 端的「审核/草稿/已上架」状态
+本接口不可见，需到 TikTok 卖家中心核对。
+
 ## Authentication
 
 All APIs use HmacSHA256 signature authentication.

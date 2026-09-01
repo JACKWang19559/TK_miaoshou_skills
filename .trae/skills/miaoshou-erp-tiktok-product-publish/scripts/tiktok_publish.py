@@ -271,6 +271,35 @@ class TikTokPublishClient:
         }
         return self._post(path, body)
 
+    def search_publish_log(
+        self,
+        page_no: int = 1,
+        page_size: int = 20,
+        status: Optional[str] = None,
+    ) -> dict:
+        """查询发布记录列表（核对发布任务最终状态）。
+
+        发布命令 ``save_move_collect_task`` 是异步提交，返回 success 仅表示
+        任务已提交；最终是否上架须用本接口核对 ``status``：
+        success-发布成功、fail-发布失败、processing-发布中、cancel-已取消。
+        失败时 ``reason`` 字段给出原因，成功时 ``platformItemId`` 为
+        TikTok 平台商品 ID。
+
+        注意：接口的 ``filter.itemId`` 并非采集箱详情 ID（实测按
+        collectBoxDetailId 过滤会返回空），故本方法不传 itemId，改由调用方
+        按 ``collectBoxDetailId`` 在结果中本地过滤。
+
+        Args:
+            page_no: 页码（默认1）。
+            page_size: 每页条数（默认20）。
+            status: 状态过滤（success/fail/processing/cancel）。
+        """
+        path = "/open/v1/product/collect_box/tiktok/move_collect/search_move_collect_list"
+        body = {"pageNo": page_no, "pageSize": page_size, "filter": {}}
+        if status:
+            body["filter"]["status"] = status
+        return self._post(path, body)
+
 
 # ---------------------------------------------------------------------------
 # Output Helpers
@@ -440,6 +469,56 @@ def print_publish_result(data: dict, detail_ids: List[int], shop_ids: List[int])
         print(f"   错误码: {code}")
         if message:
             print(f"   错误信息: {message}")
+
+
+def print_publish_log(data: dict, item_id: Optional[str] = None):
+    """Pretty-print publish log (search_move_collect_list).
+
+    Args:
+        data: 接口响应。
+        item_id: 可选，按 ``collectBoxDetailId`` 在结果中本地过滤（接口
+            ``filter.itemId`` 并非采集箱 ID，故在本地筛）。
+    """
+    data_block = data.get("data", {}) or {}
+    items = data_block.get("moveCollectDetailList") or []
+    total = data_block.get("total")
+
+    if item_id:
+        items = [r for r in items if str(r.get("collectBoxDetailId", "")) == str(item_id)]
+        total = len(items)
+
+    status_label = {
+        "success": "发布成功",
+        "fail": "发布失败",
+        "processing": "发布中",
+        "cancel": "已取消",
+    }
+
+    print(f"\n{'='*100}")
+    print(f"发布记录  |  共 {total if total is not None else len(items)} 条")
+    print(f"{'='*100}")
+
+    if not items:
+        print("（无发布记录）")
+        return
+
+    for rec in items:
+        status = rec.get("status", "-")
+        status_cn = status_label.get(status, status)
+        platform_item_id = rec.get("platformItemId") or "-"
+        reason = rec.get("reason") or ""
+        title = (rec.get("title") or "")[:50]
+        shop = rec.get("shopName") or rec.get("shopId") or "-"
+        site = rec.get("site") or "-"
+
+        print(f"[{rec.get('collectBoxDetailId', '-')}] {status_cn}({status}) "
+              f"平台商品ID={platform_item_id}")
+        print(f"  标题: {title}")
+        print(f"  店铺: {shop} | 站点: {site}")
+        if reason:
+            print(f"  失败原因: {reason}")
+        print(f"  创建: {rec.get('gmtCreate')}  更新: {rec.get('gmtModified')}")
+        print("")
 
 
 def print_shop_list(data: dict):
@@ -659,6 +738,22 @@ def cmd_publish(client: TikTokPublishClient, args):
     return result.get("data", {})
 
 
+def cmd_publish_log(client: TikTokPublishClient, args):
+    """Query publish log to verify final publish status."""
+    result = client.search_publish_log(
+        page_no=args.page,
+        page_size=args.page_size,
+        status=args.status,
+    )
+
+    if result.get("result") == "success":
+        print_publish_log(result, item_id=args.item_id)
+    else:
+        print(f"Error: {result.get('message', 'Unknown error')}")
+
+    return result.get("data", {})
+
+
 def cmd_check(client: TikTokPublishClient, args):
     """Check product publish requirements."""
     detail_id = args.detail_id
@@ -740,6 +835,10 @@ Examples:
   # 发布商品
   python tiktok_publish.py publish --detail-ids 12345 --shop-ids 10001
 
+  # 查询发布记录（核对最终状态：success/fail/processing/cancel）
+  python tiktok_publish.py publish-log
+  python tiktok_publish.py publish-log --item-id 12345 --status fail
+
   # 查看完整工作流
   python tiktok_publish.py workflow
         """,
@@ -803,6 +902,18 @@ Examples:
     pub_parser.add_argument("--shop-ids", type=str, required=True,
                             help="Comma-separated shop IDs")
 
+    # publish-log
+    log_parser = subparsers.add_parser("publish-log", help="查询发布记录（核对最终发布状态）")
+    log_parser.add_argument("--page", type=int, default=1, help="页码（默认1）")
+    log_parser.add_argument("--page-size", type=int, default=20, help="每页条数（默认20）")
+    log_parser.add_argument(
+        "--status", type=str,
+        choices=["success", "fail", "processing", "cancel"],
+        help="状态过滤（success/fail/processing/cancel）",
+    )
+    log_parser.add_argument("--item-id", type=str,
+                            help="采集箱详情 ID（collectBoxDetailId）过滤")
+
     # check
     check_parser = subparsers.add_parser("check", help="Check product publish requirements")
     check_parser.add_argument("--detail-id", type=int, required=True,
@@ -833,6 +944,7 @@ Examples:
         "responsible-persons": cmd_responsible_persons,
         "claim": cmd_claim,
         "publish": cmd_publish,
+        "publish-log": cmd_publish_log,
         "check": cmd_check,
         "workflow": cmd_workflow,
     }

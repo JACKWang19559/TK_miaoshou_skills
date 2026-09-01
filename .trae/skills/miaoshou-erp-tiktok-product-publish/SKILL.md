@@ -99,6 +99,9 @@ If authorization fails, handle these quick-start codes explicitly: `signMissing`
 8. Submit publish only after explicit confirmation.
 9. Report submitted, failed, skipped, and pending items separately.
 10. Explain whether final status is immediate or server-asynchronous.
+11. Verify final status with `publish-log`（status: success/fail/processing/cancel）：
+    `success` 且有 `platformItemId` 表示已推送到 TikTok 并生成平台商品 ID；
+    TikTok 端的「审核/草稿/已上架」状态本 API 不可见，需到卖家中心核对。
 
 ## Confirmation Template
 
@@ -144,6 +147,8 @@ python {base_dir}/scripts/tiktok_publish.py shops
 python {base_dir}/scripts/tiktok_publish.py list-products
 python {base_dir}/scripts/tiktok_publish.py claim --detail-ids 12345 --shop-ids 1001
 python {base_dir}/scripts/tiktok_publish.py publish --detail-ids 12345 --shop-ids 1001
+python {base_dir}/scripts/tiktok_publish.py publish-log --item-id 12345
+python {base_dir}/scripts/tiktok_publish.py publish-log --status fail
 python {base_dir}/scripts/tiktok_publish.py categories --site US
 python {base_dir}/scripts/tiktok_publish.py attributes --site US --cid 12345 --shop-ids 1001
 python {base_dir}/scripts/tiktok_publish.py warehouses --shop-ids 1001
@@ -175,6 +180,7 @@ Detailed endpoint behavior is in `references/api_reference.md`, including:
 - Responsible person list.
 - Claim to shop.
 - Submit publish task.
+- Search publish log (query final publish status).
 
 ## Failure Handling
 
