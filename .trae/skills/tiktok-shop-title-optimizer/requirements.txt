@@ -1,0 +1,4 @@
+# 热搜关键词标题优化技能依赖
+# optimize_title.py 只用标准库；抓取复用 tiktok-shop-opportunity-selection 的 fetch_leads.py
+requests>=2.28.0
+websocket-client>=1.6.0

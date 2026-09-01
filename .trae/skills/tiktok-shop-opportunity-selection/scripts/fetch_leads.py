@@ -36,6 +36,14 @@ JS_CONFIRM_FILTER = (
     ".find(function(x){return x.textContent.trim()==='确认';});"
     "if(b){b.click();return true;}return false;})()"
 )
+# 线索来源 code → 筛选面板 label 映射
+LEAD_SOURCE_LABELS = {
+    "UNMET_DEMAND": "未满足需求",
+    "TRENDING_VIDEOS": "热门视频",
+    "MOST_SEARCHED": "热搜商品",
+    "GLOBAL_TRENDS": "全球趋势",
+    "RISING_KEYWORDS": "飙升关键词",
+}
 JS_CB_COUNT = "document.querySelectorAll('.core-cascader-popup input[type=checkbox]').length"
 JS_FILTER_BTN_EXISTS = (
     "[].slice.call(document.querySelectorAll('button'))"
@@ -63,6 +71,17 @@ def _check_category_js(cate_id):
     return (
         "(function(){var cb=document.querySelector("
         "'.core-cascader-popup input[type=checkbox][value=\"" + str(cate_id) + "\"]');"
+        "if(cb){cb.click();return true;}return false;})()"
+    )
+
+
+def _check_lead_source_js(label):
+    """返回勾选指定线索来源 checkbox 的 JS 表达式（按 label 文本匹配）。"""
+    return (
+        "(function(){var lb=[].slice.call(document.querySelectorAll("
+        "'.core-drawer label')).find(function(l){"
+        "return l.textContent.trim()==='" + label + "';});"
+        "if(!lb)return false;var cb=lb.querySelector('input[type=checkbox]');"
         "if(cb){cb.click();return true;}return false;})()"
     )
 
@@ -167,6 +186,11 @@ def parse_args():
     parser.add_argument("--stall-seconds", type=int, default=45, help="无新增数据的停滞判定秒数，默认 45")
     parser.add_argument("--categories", default=None,
                         help="要筛选的类目 ID（逗号分隔，如 601152）；不填则不过滤")
+    parser.add_argument("--tab", default="high_potential",
+                        choices=["high_potential", "trending_keywords"],
+                        help="一级 tab：high_potential=高潜力商品, trending_keywords=热门关键词")
+    parser.add_argument("--lead-source", default=None,
+                        help="线索来源筛选（如 UNMET_DEMAND=未满足需求）；可选 TRENDING_VIDEOS/MOST_SEARCHED/GLOBAL_TRENDS/RISING_KEYWORDS")
     parser.add_argument("--subtab", default="all", choices=["all", "trend"],
                         help="二级子筛选：all=全部, trend=基于市场趋势的热门商品")
     return parser.parse_args()
@@ -188,8 +212,12 @@ def main():
     collector.send("Page.enable")
     collector.send("Runtime.enable")
 
-    # 二级子筛选直接走 URL 参数，比 UI 点击更可靠
+    # 一级 tab 与二级子筛选直接走 URL 参数，比 UI 点击更可靠
     query = f"shop_region={args.region}"
+    if args.tab == "trending_keywords":
+        query += "&tab=trending_keywords"
+    if args.lead_source:
+        query += f"&lead_cluster_source_list={args.lead_source}"
     if args.subtab == "trend":
         query += "&sub_tabs=shp_top_products"
     url = f"https://{SELLER_HOST}{OPPORTUNITY_PATH}?{query}"
@@ -197,26 +225,34 @@ def main():
     collector.send("Page.navigate", {"url": "about:blank"})
     time.sleep(1)
     collector.send("Page.navigate", {"url": url})
-    time.sleep(3)
+    time.sleep(5)
 
-    # 筛选类目（卖家可做的类目）
-    if args.categories:
+    # 筛选类目 / 线索来源（卖家可做的类目 + 如「未满足需求」）
+    if args.categories or args.lead_source:
         if not collector.wait_until_true(JS_FILTER_BTN_EXISTS, timeout=10):
-            print("警告：未找到「筛选」按钮，跳过类目筛选")
+            print("警告：未找到「筛选」按钮，跳过筛选")
         else:
             collector.eval_js_sync(JS_OPEN_FILTER)
-            time.sleep(1)
-            collector.eval_js_sync(JS_CLICK_CATEGORY_INPUT)
-            if not collector.wait_until_true(JS_CB_COUNT + ">0", timeout=8):
-                print("警告：级联类目未展开，跳过类目筛选")
-            else:
-                for cate_id in args.categories.split(","):
-                    ok = collector.eval_js_sync(_check_category_js(cate_id.strip()))
-                    print(f"勾选类目 {cate_id}: {ok}")
-                    time.sleep(0.4)
-                collector.eval_js_sync(JS_CONFIRM_FILTER)
-                time.sleep(2)
-                collector.reset()
+            time.sleep(1.5)
+            # 勾选类目（需先展开级联）
+            if args.categories:
+                collector.eval_js_sync(JS_CLICK_CATEGORY_INPUT)
+                if not collector.wait_until_true(JS_CB_COUNT + ">0", timeout=20):
+                    print("警告：级联类目未展开，跳过类目筛选")
+                else:
+                    for cate_id in args.categories.split(","):
+                        ok = collector.eval_js_sync(_check_category_js(cate_id.strip()))
+                        print(f"勾选类目 {cate_id}: {ok}")
+                        time.sleep(0.4)
+            # 勾选线索来源（如「未满足需求」），在筛选完类目后点上
+            if args.lead_source:
+                label = LEAD_SOURCE_LABELS.get(args.lead_source, args.lead_source)
+                ok = collector.eval_js_sync(_check_lead_source_js(label))
+                print(f"勾选线索来源 {args.lead_source}({label}): {ok}")
+                time.sleep(0.4)
+            collector.eval_js_sync(JS_CONFIRM_FILTER)
+            time.sleep(2)
+            collector.reset()
 
     deadline = time.time() + args.timeout
     last_scroll = 0.0
@@ -246,18 +282,29 @@ def main():
 
     ws.close()
 
+    leads = list(collector.leads.values())
+    # 线索来源筛选不进接口（postData 无此字段，接口返回全量，前端负责过滤），
+    # 因此在本地按 lead_cluster_source_tag.code 过滤。
+    if args.lead_source:
+        leads = [
+            l for l in leads
+            if (l.get("lead_cluster_source_tag") or {}).get("code") == args.lead_source
+        ]
+
     result = {
         "region": args.region,
+        "tab": args.tab,
         "subtab": args.subtab,
+        "lead_source": args.lead_source,
         "fetched_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         "total_product_count": collector.total,
-        "lead_count": len(collector.leads),
-        "leads": list(collector.leads.values()),
+        "lead_count": len(leads),
+        "leads": leads,
     }
     with open(args.out, "w", encoding="utf-8") as fh:
         json.dump(result, fh, ensure_ascii=False, indent=2)
 
-    print(f"已抓取 {len(collector.leads)} 条商机线索（平台总数 {collector.total}），写入 {args.out}")
+    print(f"已抓取 {len(leads)} 条商机线索（平台总数 {collector.total}），写入 {args.out}")
 
 
 if __name__ == "__main__":

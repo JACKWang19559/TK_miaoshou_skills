@@ -11,13 +11,14 @@
 
 ---
 
-## 一、能力全景（17 个技能）
+## 一、能力全景（18 个技能）
 
 ### 上游：选品 / 采集 / 认领
 
 | 技能 | 类型 | 作用 |
 | --- | --- | --- |
-| `tiktok-shop-opportunity-selection` | 脚本+方法论 | 抓 TikTok 卖家中心「商品机会」数据自动选品：注入登录 cookie → 浏览器 CDP 捕获接口（高潜力商品/热门关键词/低竞争类目）→ 按潜力/搜索量/竞争度打分排序 |
+| `tiktok-shop-opportunity-selection` | 脚本+方法论 | 抓 TikTok 卖家中心「商品机会」数据自动选品：注入登录 cookie → 浏览器 CDP 捕获接口（高潜力商品/热门关键词/低竞争类目），支持类目筛选与「未满足需求」线索来源 → 按潜力/搜索量/竞争度打分排序 |
+| `tiktok-shop-title-optimizer` | 脚本 | 用「商品机会→热门关键词」热搜词优化产品标题：五级过滤（三级类目→品牌/店铺名→词数/搜索量→越南语服饰属性冲突→标题核心词相关性）后按 相关性>搜索量 排序融入标题 |
 | `mss-1688-sourcing` | 方法论 | 妙手 API 从 1688 选品采集到公共采集箱的工作流（选品定位、链接获取、批量采集、核验） |
 | `miaoshou-erp-source-import` | API 脚本 | 把 1688 / 速卖通等货源链接批量采集进妙手**公共采集箱** |
 | `miaoshou-erp-common-collectbox-manage` | API 脚本 | 公共采集箱商品查询/新增/编辑/删除、批量改价改库存改 SKU |
@@ -67,7 +68,9 @@ TK_miaoshou_skills/
         ├── miaoshou-erp-tiktok-product-edit/
         ├── miaoshou-erp-tiktok-apparel-readiness/
         │   └── scripts/  gen_sizechart.py / upload_image.py / build_edit_payload.py
-        └── ...（共 16 个技能）
+        ├── tiktok-shop-opportunity-selection/   # CDP 抓商品机会（需 websocket-client）
+        ├── tiktok-shop-title-optimizer/         # 热搜词五级过滤 + 标题优化（纯标准库）
+        └── ...（共 18 个技能）
 ```
 
 ---
@@ -90,7 +93,9 @@ TK_miaoshou_skills/
 pip install -r requirements.txt
 ```
 
-第三方依赖仅两个：`requests`（API 请求）、`Pillow`（尺码表图生成）；其余均为标准库。
+第三方依赖三个：`requests`（妙手 API 请求）、`Pillow`（尺码表图生成）、
+`websocket-client`（TikTok 商品机会 CDP 抓取）；其余均为标准库。
+其中 `tiktok-shop-title-optimizer` 的标题优化脚本纯标准库，可不装依赖直接运行。
 
 ### 3.3 配置凭证（二选一）
 
@@ -205,6 +210,25 @@ py .trae/skills/miaoshou-erp-tiktok-product-edit/scripts/tiktok_collectbox.py \
 # 9) 发布到 TikTok 店铺
 py .trae/skills/miaoshou-erp-tiktok-product-publish/scripts/tiktok_publish.py \
     publish --detail-ids <detailId> --shop-ids <shopId>
+```
+
+### 5.1 TikTok「商品机会」选品与标题优化（不走妙手 API，走浏览器 CDP）
+
+前提：受管浏览器以 `--remote-debugging-port=9222` 启动，并准备卖家中心登录 cookie 文件
+（EditThisCookie 导出的 JSON）。
+
+```bash
+# 1) 抓「热门关键词」tab：筛选女装类目 + 未满足需求线索，落盘 JSON
+py .trae/skills/tiktok-shop-opportunity-selection/scripts/fetch_leads.py \
+    --cookie-file <cookie.json> --region VN \
+    --tab trending_keywords --categories 601152 \
+    --lead-source UNMET_DEMAND --out keyword_leads.json
+
+# 2) 热搜词五级过滤后优化产品标题（--cate-id 为产品三级类目 ID）
+py .trae/skills/tiktok-shop-title-optimizer/scripts/optimize_title.py \
+    --keywords keyword_leads.json \
+    --title "Áo khoác len nữ dáng dài cổ V" \
+    --cate-id 601284 --top 6
 ```
 
 > 各脚本完整参数以对应技能目录下的 `SKILL.md` 与 `python <script> --help` 为准。
